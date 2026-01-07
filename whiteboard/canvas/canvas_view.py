@@ -532,7 +532,7 @@ class CanvasView(Gtk.DrawingArea):
     def add_image(self):
         """Add a new image to the canvas"""
         # Show file chooser dialog
-        from gi.repository import Gtk
+        from gi.repository import Gtk, Gio
 
         dialog = Gtk.FileDialog()
         filter_images = Gtk.FileFilter()
@@ -542,9 +542,10 @@ class CanvasView(Gtk.DrawingArea):
         filter_images.add_mime_type('image/gif')
         filter_images.add_mime_type('image/webp')
 
-        filters = Gtk.ListStore.new([Gtk.FileFilter])
-        filters.append([filter_images])
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(filter_images)
         dialog.set_filters(filters)
+        dialog.set_default_filter(filter_images)
 
         # Get the toplevel window
         window = self.get_root()
