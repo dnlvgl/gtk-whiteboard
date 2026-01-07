@@ -43,15 +43,33 @@ python main.py
 - [x] Viewport management
 - [x] Object creation (notes, text, images)
 - [x] Object selection and movement
+
+**Phase 2 (Object Interaction) - COMPLETED ✓**
+- [x] Object resizing with drag handles
+- [x] Text editing (double-click to edit)
+- [x] Delete objects (Delete/Backspace key)
+- [x] Duplicate objects (Ctrl+D)
+- [x] Z-order control (bring to front / send to back)
+- [x] Cursor feedback for interactions
 - [ ] File save/load (Phase 3)
 
 ## Usage
 
+### Navigation
 - **Pan**: Click and drag on empty canvas
-- **Zoom**: Scroll with mouse wheel
-- **Zoom buttons**: Use +/- buttons in toolbar
+- **Zoom**: Scroll with mouse wheel, or use +/- buttons in toolbar
+
+### Object Creation
+- **Add objects**: Click the + button → choose Note/Text/Image
+
+### Object Manipulation
 - **Select**: Click on an object
 - **Move**: Drag a selected object
+- **Resize**: Drag the corner handles of a selected object
+- **Edit text**: Double-click on a note or text object
+- **Delete**: Select object and press Delete or Backspace
+- **Duplicate**: Select object and press Ctrl+D
+- **Z-order**: Menu → Object → Bring to Front / Send to Back
 
 ## Project Structure
 

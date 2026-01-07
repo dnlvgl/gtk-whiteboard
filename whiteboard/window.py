@@ -39,6 +39,13 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         menu.append('New', 'app.new')
         menu.append('Open', 'app.open')
         menu.append('Save', 'app.save')
+
+        # Object submenu
+        object_menu = Gio.Menu()
+        object_menu.append('Bring to Front', 'win.bring-to-front')
+        object_menu.append('Send to Back', 'win.send-to-back')
+        menu.append_submenu('Object', object_menu)
+
         menu.append('Quit', 'app.quit')
 
         menu_button.set_menu_model(menu)
@@ -88,6 +95,8 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         self.create_action('add-note', self.on_add_note)
         self.create_action('add-text', self.on_add_text)
         self.create_action('add-image', self.on_add_image)
+        self.create_action('bring-to-front', self.on_bring_to_front)
+        self.create_action('send-to-back', self.on_send_to_back)
 
     def create_action(self, name, callback):
         """Create a window action"""
@@ -114,6 +123,14 @@ class WhiteboardWindow(Adw.ApplicationWindow):
     def on_add_image(self, action, param):
         """Add a new image to the canvas"""
         self.canvas_view.add_image()
+
+    def on_bring_to_front(self, action, param):
+        """Bring selected object to front"""
+        self.canvas_view.bring_to_front()
+
+    def on_send_to_back(self, action, param):
+        """Send selected object to back"""
+        self.canvas_view.send_to_back()
 
     def new_board(self):
         """Create a new whiteboard"""
