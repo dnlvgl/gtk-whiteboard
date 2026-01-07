@@ -9,6 +9,7 @@ gi.require_version('Adw', '1')
 from gi.repository import Gtk, Adw, Gio
 
 from whiteboard.canvas.canvas_view import CanvasView
+from whiteboard.storage import BoardFile
 
 
 class WhiteboardWindow(Adw.ApplicationWindow):
@@ -134,7 +135,11 @@ class WhiteboardWindow(Adw.ApplicationWindow):
 
     def new_board(self):
         """Create a new whiteboard"""
-        # TODO: Implement new board logic
+        # Check if we need to save current board
+        if self.is_modified and self.canvas_view.objects:
+            # TODO: Show save confirmation dialog
+            pass
+
         self.canvas_view.clear()
         self.current_file = None
         self.is_modified = False
@@ -142,8 +147,18 @@ class WhiteboardWindow(Adw.ApplicationWindow):
 
     def open_board(self):
         """Open a whiteboard file"""
-        # TODO: Implement file opening
         dialog = Gtk.FileDialog()
+
+        # Set file filter for .wboard files
+        filter_wboard = Gtk.FileFilter()
+        filter_wboard.set_name('Whiteboard Files')
+        filter_wboard.add_pattern('*.wboard')
+
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(filter_wboard)
+        dialog.set_filters(filters)
+        dialog.set_default_filter(filter_wboard)
+
         dialog.open(self, None, self.on_open_response)
 
     def on_open_response(self, dialog, result):
@@ -152,24 +167,70 @@ class WhiteboardWindow(Adw.ApplicationWindow):
             file = dialog.open_finish(result)
             if file:
                 path = file.get_path()
-                # TODO: Load board from file
+
+                # Load board from file
+                board_file = BoardFile(path)
+                objects = board_file.load()
+
+                # Update canvas
+                self.canvas_view.load_objects(objects)
+
                 self.current_file = path
+                self.is_modified = False
                 self.set_title(f'Whiteboard - {file.get_basename()}')
+
         except Exception as e:
             print(f'Error opening file: {e}')
+            # Show error dialog
+            error_dialog = Adw.MessageDialog.new(
+                self,
+                'Error Opening File',
+                f'Failed to open whiteboard file:\n{str(e)}'
+            )
+            error_dialog.add_response('ok', 'OK')
+            error_dialog.show()
 
     def save_board(self):
         """Save the current whiteboard"""
         if self.current_file:
-            # TODO: Save to existing file
-            pass
+            try:
+                # Save to existing file
+                board_file = BoardFile(self.current_file)
+                board_file.save(self.canvas_view.objects)
+
+                self.is_modified = False
+                print(f'Saved to {self.current_file}')
+
+            except Exception as e:
+                print(f'Error saving file: {e}')
+                # Show error dialog
+                error_dialog = Adw.MessageDialog.new(
+                    self,
+                    'Error Saving File',
+                    f'Failed to save whiteboard file:\n{str(e)}'
+                )
+                error_dialog.add_response('ok', 'OK')
+                error_dialog.show()
         else:
             self.save_board_as()
 
     def save_board_as(self):
         """Save the whiteboard to a new file"""
-        # TODO: Implement file saving
         dialog = Gtk.FileDialog()
+
+        # Set initial name
+        dialog.set_initial_name('Untitled.wboard')
+
+        # Set file filter for .wboard files
+        filter_wboard = Gtk.FileFilter()
+        filter_wboard.set_name('Whiteboard Files')
+        filter_wboard.add_pattern('*.wboard')
+
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(filter_wboard)
+        dialog.set_filters(filters)
+        dialog.set_default_filter(filter_wboard)
+
         dialog.save(self, None, self.on_save_response)
 
     def on_save_response(self, dialog, result):
@@ -178,9 +239,27 @@ class WhiteboardWindow(Adw.ApplicationWindow):
             file = dialog.save_finish(result)
             if file:
                 path = file.get_path()
-                # TODO: Save board to file
+
+                # Ensure .wboard extension
+                if not path.endswith('.wboard'):
+                    path += '.wboard'
+
+                # Save board to file
+                board_file = BoardFile(path)
+                board_file.save(self.canvas_view.objects)
+
                 self.current_file = path
                 self.is_modified = False
                 self.set_title(f'Whiteboard - {file.get_basename()}')
+                print(f'Saved to {path}')
+
         except Exception as e:
             print(f'Error saving file: {e}')
+            # Show error dialog
+            error_dialog = Adw.MessageDialog.new(
+                self,
+                'Error Saving File',
+                f'Failed to save whiteboard file:\n{str(e)}'
+            )
+            error_dialog.add_response('ok', 'OK')
+            error_dialog.show()

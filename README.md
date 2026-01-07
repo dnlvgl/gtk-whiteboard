@@ -51,7 +51,13 @@ python main.py
 - [x] Duplicate objects (Ctrl+D)
 - [x] Z-order control (bring to front / send to back)
 - [x] Cursor feedback for interactions
-- [ ] File save/load (Phase 3)
+
+**Phase 3 (File Storage) - COMPLETED ✓**
+- [x] SQLite database schema
+- [x] .wboard file format (ZIP with SQLite + assets)
+- [x] Save boards to file (Ctrl+S)
+- [x] Load boards from file (Ctrl+O)
+- [x] Image asset management
 
 ## Usage
 
@@ -70,6 +76,12 @@ python main.py
 - **Delete**: Select object and press Delete or Backspace
 - **Duplicate**: Select object and press Ctrl+D
 - **Z-order**: Menu → Object → Bring to Front / Send to Back
+
+### File Operations
+- **New board**: Ctrl+N or Menu → New
+- **Open board**: Ctrl+O or Menu → Open
+- **Save board**: Ctrl+S or Menu → Save
+- **Save as**: Menu → Save (when no file is open)
 
 ## Project Structure
 

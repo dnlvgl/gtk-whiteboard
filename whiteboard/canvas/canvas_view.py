@@ -679,3 +679,15 @@ class CanvasView(Gtk.DrawingArea):
         self.selected_object = None
         self.viewport = Viewport()
         self.queue_draw()
+
+    def load_objects(self, objects):
+        """
+        Load objects into the canvas
+
+        Args:
+            objects: List of canvas objects to load
+        """
+        self.clear()
+        self.objects = objects
+        self.selected_object = None
+        self.queue_draw()
