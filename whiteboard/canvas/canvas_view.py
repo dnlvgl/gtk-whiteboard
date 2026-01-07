@@ -224,12 +224,11 @@ class CanvasView(Gtk.DrawingArea):
         if isinstance(self.selected_object, NoteObject):
             color_menu = Gio.Menu()
             colors = [
-                ('yellow', 'Yellow'),
-                ('orange', 'Orange'),
-                ('pink', 'Pink'),
-                ('blue', 'Blue'),
-                ('green', 'Green'),
-                ('purple', 'Purple')
+                ('yellow', '🟨 Yellow'),
+                ('orange', '🟧 Orange'),
+                ('blue', '🟦 Blue'),
+                ('green', '🟩 Green'),
+                ('purple', '🟪 Purple')
             ]
             for color_name, color_label in colors:
                 color_menu.append(color_label, f'canvas.color-{color_name}')
@@ -279,7 +278,7 @@ class CanvasView(Gtk.DrawingArea):
 
         # Add color actions for notes
         if isinstance(self.selected_object, NoteObject):
-            colors = ['yellow', 'orange', 'pink', 'blue', 'green', 'purple']
+            colors = ['yellow', 'orange', 'blue', 'green', 'purple']
             for color_name in colors:
                 color_action = Gio.SimpleAction.new(f'color-{color_name}', None)
                 color_action.connect('activate',

@@ -15,7 +15,6 @@ class NoteObject(CanvasObject):
     COLORS = {
         'yellow': (1.0, 0.92, 0.23),
         'orange': (1.0, 0.6, 0.0),
-        'pink': (1.0, 0.5, 0.8),
         'blue': (0.5, 0.7, 1.0),
         'green': (0.5, 0.9, 0.5),
         'purple': (0.7, 0.5, 1.0),
