@@ -59,6 +59,13 @@ python main.py
 - [x] Load boards from file (Ctrl+O)
 - [x] Image asset management
 
+**Phase 4 (UI Polish) - COMPLETED ✓**
+- [x] Color picker dialog for notes
+- [x] Right-click context menu
+- [x] Save confirmation on quit/new
+- [x] Modified state tracking (* in title)
+- [x] Enhanced visual feedback
+
 ## Usage
 
 ### Navigation
@@ -66,16 +73,19 @@ python main.py
 - **Zoom**: Scroll with mouse wheel, or use +/- buttons in toolbar
 
 ### Object Creation
-- **Add objects**: Click the + button → choose Note/Text/Image
+- **Add note**: Click + button → Add Note → Choose color
+- **Add text**: Click + button → Add Text
+- **Add image**: Click + button → Add Image → Select file
 
 ### Object Manipulation
 - **Select**: Click on an object
 - **Move**: Drag a selected object
 - **Resize**: Drag the corner handles of a selected object
 - **Edit text**: Double-click on a note or text object
-- **Delete**: Select object and press Delete or Backspace
-- **Duplicate**: Select object and press Ctrl+D
-- **Z-order**: Menu → Object → Bring to Front / Send to Back
+- **Delete**: Select object and press Delete or Backspace, or right-click → Delete
+- **Duplicate**: Select object and press Ctrl+D, or right-click → Duplicate
+- **Z-order**: Menu → Object, or right-click → Bring to Front / Send to Back
+- **Context menu**: Right-click on any object for quick actions
 
 ### File Operations
 - **New board**: Ctrl+N or Menu → New

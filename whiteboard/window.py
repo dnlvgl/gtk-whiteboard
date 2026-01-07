@@ -84,6 +84,7 @@ class WhiteboardWindow(Adw.ApplicationWindow):
 
         # Create canvas view
         self.canvas_view = CanvasView()
+        self.canvas_view.on_modified = self.mark_modified
 
         # Create main content box
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -137,13 +138,63 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         """Create a new whiteboard"""
         # Check if we need to save current board
         if self.is_modified and self.canvas_view.objects:
-            # TODO: Show save confirmation dialog
-            pass
+            self.show_save_confirmation(self._do_new_board)
+            return
 
+        self._do_new_board()
+
+    def _do_new_board(self):
+        """Actually create new board after confirmation"""
         self.canvas_view.clear()
         self.current_file = None
         self.is_modified = False
         self.set_title('Whiteboard')
+
+    def mark_modified(self):
+        """Mark the board as modified"""
+        if not self.is_modified:
+            self.is_modified = True
+            # Update title to show modified state
+            title = self.get_title()
+            if not title.startswith('*'):
+                self.set_title(f'*{title}')
+
+    def show_save_confirmation(self, callback):
+        """
+        Show save confirmation dialog
+
+        Args:
+            callback: Function to call after handling save
+        """
+        dialog = Adw.MessageDialog.new(
+            self,
+            'Save Changes?',
+            'There are unsaved changes. Do you want to save them?'
+        )
+        dialog.add_response('cancel', 'Cancel')
+        dialog.add_response('discard', 'Discard')
+        dialog.add_response('save', 'Save')
+        dialog.set_response_appearance('discard', Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_response_appearance('save', Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response('save')
+        dialog.set_close_response('cancel')
+
+        dialog.connect('response', self._on_save_confirmation_response, callback)
+        dialog.show()
+
+    def _on_save_confirmation_response(self, dialog, response, callback):
+        """Handle save confirmation response"""
+        if response == 'save':
+            # Save the board
+            self.save_board()
+            # Call the callback after save
+            if callback:
+                callback()
+        elif response == 'discard':
+            # Discard changes and proceed
+            if callback:
+                callback()
+        # If cancel, do nothing
 
     def open_board(self):
         """Open a whiteboard file"""
@@ -199,6 +250,10 @@ class WhiteboardWindow(Adw.ApplicationWindow):
                 board_file.save(self.canvas_view.objects)
 
                 self.is_modified = False
+                # Update title to remove asterisk
+                import os
+                filename = os.path.basename(self.current_file)
+                self.set_title(f'Whiteboard - {filename}')
                 print(f'Saved to {self.current_file}')
 
             except Exception as e:

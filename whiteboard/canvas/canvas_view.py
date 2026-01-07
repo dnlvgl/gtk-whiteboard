@@ -26,6 +26,9 @@ class CanvasView(Gtk.DrawingArea):
         self.objects = []
         self.selected_object = None
 
+        # Callback for when canvas is modified
+        self.on_modified = None
+
         # Interaction state
         self.drag_start = None
         self.drag_object = None
@@ -54,6 +57,12 @@ class CanvasView(Gtk.DrawingArea):
         click_gesture = Gtk.GestureClick()
         click_gesture.connect('pressed', self.on_click)
         self.add_controller(click_gesture)
+
+        # Right-click gesture for context menu
+        right_click_gesture = Gtk.GestureClick()
+        right_click_gesture.set_button(3)  # Right mouse button
+        right_click_gesture.connect('pressed', self.on_right_click)
+        self.add_controller(right_click_gesture)
 
         # Scroll for zooming
         scroll_controller = Gtk.EventControllerScroll()
@@ -156,6 +165,110 @@ class CanvasView(Gtk.DrawingArea):
                 self.selected_object = None
 
         self.queue_draw()
+
+    def on_right_click(self, gesture, n_press, x, y):
+        """
+        Handle right-click for context menu
+
+        Args:
+            gesture: GestureClick controller
+            n_press: Number of clicks
+            x: X coordinate
+            y: Y coordinate
+        """
+        # Convert to canvas coordinates
+        canvas_x, canvas_y = self.viewport.screen_to_canvas(x, y)
+
+        # Find clicked object
+        clicked_object = None
+        for obj in reversed(sorted(self.objects, key=lambda o: o.z_index)):
+            if obj.contains_point(canvas_x, canvas_y):
+                clicked_object = obj
+                break
+
+        if not clicked_object:
+            return
+
+        # Select the object if not already selected
+        if self.selected_object != clicked_object:
+            if self.selected_object:
+                self.selected_object.selected = False
+            clicked_object.selected = True
+            self.selected_object = clicked_object
+            self.queue_draw()
+
+        # Show context menu
+        self.show_context_menu(x, y)
+
+    def show_context_menu(self, x, y):
+        """
+        Show context menu for selected object
+
+        Args:
+            x: X coordinate (screen space)
+            y: Y coordinate (screen space)
+        """
+        from gi.repository import Gtk, Gio, Gdk
+
+        # Create menu model
+        menu = Gio.Menu()
+
+        if hasattr(self.selected_object, 'text'):
+            menu.append('Edit Text', 'canvas.edit-text')
+
+        menu.append('Duplicate', 'canvas.duplicate')
+        menu.append('Bring to Front', 'canvas.bring-front')
+        menu.append('Send to Back', 'canvas.send-back')
+        menu.append('Delete', 'canvas.delete')
+
+        # Create popover
+        popover = Gtk.PopoverMenu()
+        popover.set_menu_model(menu)
+        popover.set_parent(self)
+        popover.set_has_arrow(False)
+
+        # Position at click location
+        rect = Gdk.Rectangle()
+        rect.x = int(x)
+        rect.y = int(y)
+        rect.width = 1
+        rect.height = 1
+        popover.set_pointing_to(rect)
+
+        # Create actions
+        action_group = Gio.SimpleActionGroup()
+
+        edit_action = Gio.SimpleAction.new('edit-text', None)
+        edit_action.connect('activate', lambda a, p: self.edit_object_text(self.selected_object))
+        action_group.add_action(edit_action)
+
+        duplicate_action = Gio.SimpleAction.new('duplicate', None)
+        duplicate_action.connect('activate', lambda a, p: self.duplicate_object(self.selected_object))
+        action_group.add_action(duplicate_action)
+
+        front_action = Gio.SimpleAction.new('bring-front', None)
+        front_action.connect('activate', lambda a, p: self.bring_to_front())
+        action_group.add_action(front_action)
+
+        back_action = Gio.SimpleAction.new('send-back', None)
+        back_action.connect('activate', lambda a, p: self.send_to_back())
+        action_group.add_action(back_action)
+
+        delete_action = Gio.SimpleAction.new('delete', None)
+        delete_action.connect('activate', lambda a, p: self._delete_selected())
+        action_group.add_action(delete_action)
+
+        self.insert_action_group('canvas', action_group)
+
+        popover.popup()
+
+    def _delete_selected(self):
+        """Delete the currently selected object"""
+        if self.selected_object:
+            self.objects.remove(self.selected_object)
+            self.selected_object = None
+            self._notify_modified()
+            self.queue_draw()
 
     def on_drag_begin(self, gesture, start_x, start_y):
         """
@@ -413,6 +526,7 @@ class CanvasView(Gtk.DrawingArea):
             if self.selected_object:
                 self.objects.remove(self.selected_object)
                 self.selected_object = None
+                self._notify_modified()
                 self.queue_draw()
                 return True
 
@@ -465,6 +579,7 @@ class CanvasView(Gtk.DrawingArea):
 
         # Add to canvas
         self.objects.append(new_obj)
+        self._notify_modified()
         self.queue_draw()
 
     def zoom_in(self):
@@ -489,25 +604,127 @@ class CanvasView(Gtk.DrawingArea):
         )
         self.queue_draw()
 
-    def add_note(self):
-        """Add a new note to the canvas"""
-        # Create note in center of viewport
-        width = self.get_width()
-        height = self.get_height()
-        center_x, center_y = self.viewport.screen_to_canvas(width / 2, height / 2)
+    def add_note(self, color='yellow'):
+        """
+        Add a new note to the canvas
 
-        # Create a new note
-        note = NoteObject(
-            x=center_x - 100,
-            y=center_y - 100,
-            width=200,
-            height=200,
-            text='Double-click to edit',
-            color='yellow'
+        Args:
+            color: Color name for the note
+        """
+        # Show color picker dialog
+        self.show_note_color_dialog()
+
+    def show_note_color_dialog(self):
+        """Show dialog to choose note color"""
+        from gi.repository import Gtk
+
+        # Create dialog
+        dialog = Gtk.Dialog(
+            title='Choose Note Color',
+            transient_for=self.get_root(),
+            modal=True
         )
-        note.z_index = len(self.objects)
-        self.objects.append(note)
-        self.queue_draw()
+        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL)
+        dialog.add_button('Create', Gtk.ResponseType.OK)
+        dialog.set_default_response(Gtk.ResponseType.OK)
+
+        # Create color button grid
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_margin_top(10)
+        box.set_margin_bottom(10)
+        box.set_margin_start(10)
+        box.set_margin_end(10)
+
+        label = Gtk.Label(label='Select a color for the note:')
+        box.append(label)
+
+        # Create grid of color buttons
+        grid = Gtk.Grid()
+        grid.set_column_spacing(10)
+        grid.set_row_spacing(10)
+        grid.set_halign(Gtk.Align.CENTER)
+
+        colors = [
+            ('yellow', 'Yellow'),
+            ('orange', 'Orange'),
+            ('pink', 'Pink'),
+            ('blue', 'Blue'),
+            ('green', 'Green'),
+            ('purple', 'Purple')
+        ]
+
+        selected_color = ['yellow']  # Use list to allow modification in closure
+
+        for i, (color_name, color_label) in enumerate(colors):
+            button = Gtk.ToggleButton(label=color_label)
+            button.set_size_request(100, 40)
+
+            # Set button color using CSS
+            from whiteboard.objects.note import NoteObject
+            rgb = NoteObject.COLORS[color_name]
+            css_color = f'rgb({int(rgb[0]*255)},{int(rgb[1]*255)},{int(rgb[2]*255)})'
+
+            css_provider = Gtk.CssProvider()
+            css_provider.load_from_data(
+                f'button {{ background-color: {css_color}; }}'.encode()
+            )
+            button.get_style_context().add_provider(
+                css_provider,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+            )
+
+            # Select yellow by default
+            if color_name == 'yellow':
+                button.set_active(True)
+
+            # Connect toggle handler
+            button.connect('toggled', self._on_color_button_toggled,
+                          color_name, selected_color, grid)
+
+            grid.attach(button, i % 3, i // 3, 1, 1)
+
+        box.append(grid)
+
+        content_area = dialog.get_content_area()
+        content_area.append(box)
+
+        # Show dialog and handle response
+        dialog.connect('response', self._on_note_color_response, selected_color)
+        dialog.show()
+
+    def _on_color_button_toggled(self, button, color_name, selected_color, grid):
+        """Handle color button toggle"""
+        if button.get_active():
+            selected_color[0] = color_name
+            # Deactivate other buttons
+            child = grid.get_first_child()
+            while child:
+                if isinstance(child, Gtk.ToggleButton) and child != button:
+                    child.set_active(False)
+                child = child.get_next_sibling()
+
+    def _on_note_color_response(self, dialog, response, selected_color):
+        """Handle note color dialog response"""
+        if response == Gtk.ResponseType.OK:
+            # Create note with selected color
+            width = self.get_width()
+            height = self.get_height()
+            center_x, center_y = self.viewport.screen_to_canvas(width / 2, height / 2)
+
+            note = NoteObject(
+                x=center_x - 100,
+                y=center_y - 100,
+                width=200,
+                height=200,
+                text='Double-click to edit',
+                color=selected_color[0]
+            )
+            note.z_index = len(self.objects)
+            self.objects.append(note)
+            self._notify_modified()
+            self.queue_draw()
+
+        dialog.close()
 
     def add_text(self):
         """Add new text to the canvas"""
@@ -527,6 +744,7 @@ class CanvasView(Gtk.DrawingArea):
         )
         text.z_index = len(self.objects)
         self.objects.append(text)
+        self._notify_modified()
         self.queue_draw()
 
     def add_image(self):
@@ -578,6 +796,7 @@ class CanvasView(Gtk.DrawingArea):
 
                 image.z_index = len(self.objects)
                 self.objects.append(image)
+                self._notify_modified()
                 self.queue_draw()
         except Exception as e:
             print(f'Error loading image: {e}')
@@ -646,6 +865,7 @@ class CanvasView(Gtk.DrawingArea):
 
             # Update object
             obj.text = new_text
+            self._notify_modified()
             self.queue_draw()
 
         dialog.close()
@@ -660,6 +880,7 @@ class CanvasView(Gtk.DrawingArea):
 
         # Set selected object to max + 1
         self.selected_object.z_index = max_z + 1
+        self._notify_modified()
         self.queue_draw()
 
     def send_to_back(self):
@@ -672,6 +893,7 @@ class CanvasView(Gtk.DrawingArea):
 
         # Set selected object to min - 1
         self.selected_object.z_index = min_z - 1
+        self._notify_modified()
         self.queue_draw()
 
     def clear(self):
@@ -692,3 +914,8 @@ class CanvasView(Gtk.DrawingArea):
         self.objects = objects
         self.selected_object = None
         self.queue_draw()
+
+    def _notify_modified(self):
+        """Notify that the canvas has been modified"""
+        if self.on_modified:
+            self.on_modified()
