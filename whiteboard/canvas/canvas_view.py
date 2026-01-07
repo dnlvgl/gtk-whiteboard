@@ -29,6 +29,9 @@ class CanvasView(Gtk.DrawingArea):
         # Callback for when canvas is modified
         self.on_modified = None
 
+        # Note color preference
+        self.last_note_color = 'yellow'
+
         # Interaction state
         self.drag_start = None
         self.drag_object = None
@@ -216,6 +219,22 @@ class CanvasView(Gtk.DrawingArea):
         if hasattr(self.selected_object, 'text'):
             menu.append('Edit Text', 'canvas.edit-text')
 
+        # Add color submenu for notes
+        from whiteboard.objects.note import NoteObject
+        if isinstance(self.selected_object, NoteObject):
+            color_menu = Gio.Menu()
+            colors = [
+                ('yellow', 'Yellow'),
+                ('orange', 'Orange'),
+                ('pink', 'Pink'),
+                ('blue', 'Blue'),
+                ('green', 'Green'),
+                ('purple', 'Purple')
+            ]
+            for color_name, color_label in colors:
+                color_menu.append(color_label, f'canvas.color-{color_name}')
+            menu.append_submenu('Change Color', color_menu)
+
         menu.append('Duplicate', 'canvas.duplicate')
         menu.append('Bring to Front', 'canvas.bring-front')
         menu.append('Send to Back', 'canvas.send-back')
@@ -257,6 +276,15 @@ class CanvasView(Gtk.DrawingArea):
         delete_action = Gio.SimpleAction.new('delete', None)
         delete_action.connect('activate', lambda a, p: self._delete_selected())
         action_group.add_action(delete_action)
+
+        # Add color actions for notes
+        if isinstance(self.selected_object, NoteObject):
+            colors = ['yellow', 'orange', 'pink', 'blue', 'green', 'purple']
+            for color_name in colors:
+                color_action = Gio.SimpleAction.new(f'color-{color_name}', None)
+                color_action.connect('activate',
+                                   lambda a, p, c=color_name: self.change_note_color(self.selected_object, c))
+                action_group.add_action(color_action)
 
         self.insert_action_group('canvas', action_group)
 
@@ -604,127 +632,41 @@ class CanvasView(Gtk.DrawingArea):
         )
         self.queue_draw()
 
-    def add_note(self, color='yellow'):
+    def add_note(self):
+        """Add a new note to the canvas using the last used color"""
+        # Create note in center of viewport
+        width = self.get_width()
+        height = self.get_height()
+        center_x, center_y = self.viewport.screen_to_canvas(width / 2, height / 2)
+
+        # Create a new note with last used color
+        note = NoteObject(
+            x=center_x - 100,
+            y=center_y - 100,
+            width=200,
+            height=200,
+            text='Double-click to edit',
+            color=self.last_note_color
+        )
+        note.z_index = len(self.objects)
+        self.objects.append(note)
+        self._notify_modified()
+        self.queue_draw()
+
+    def change_note_color(self, note, new_color):
         """
-        Add a new note to the canvas
+        Change the color of a note
 
         Args:
-            color: Color name for the note
+            note: NoteObject to change color
+            new_color: New color name
         """
-        # Show color picker dialog
-        self.show_note_color_dialog()
-
-    def show_note_color_dialog(self):
-        """Show dialog to choose note color"""
-        from gi.repository import Gtk
-
-        # Create dialog
-        dialog = Gtk.Dialog(
-            title='Choose Note Color',
-            transient_for=self.get_root(),
-            modal=True
-        )
-        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL)
-        dialog.add_button('Create', Gtk.ResponseType.OK)
-        dialog.set_default_response(Gtk.ResponseType.OK)
-
-        # Create color button grid
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        box.set_margin_top(10)
-        box.set_margin_bottom(10)
-        box.set_margin_start(10)
-        box.set_margin_end(10)
-
-        label = Gtk.Label(label='Select a color for the note:')
-        box.append(label)
-
-        # Create grid of color buttons
-        grid = Gtk.Grid()
-        grid.set_column_spacing(10)
-        grid.set_row_spacing(10)
-        grid.set_halign(Gtk.Align.CENTER)
-
-        colors = [
-            ('yellow', 'Yellow'),
-            ('orange', 'Orange'),
-            ('pink', 'Pink'),
-            ('blue', 'Blue'),
-            ('green', 'Green'),
-            ('purple', 'Purple')
-        ]
-
-        selected_color = ['yellow']  # Use list to allow modification in closure
-
-        for i, (color_name, color_label) in enumerate(colors):
-            button = Gtk.ToggleButton(label=color_label)
-            button.set_size_request(100, 40)
-
-            # Set button color using CSS
-            from whiteboard.objects.note import NoteObject
-            rgb = NoteObject.COLORS[color_name]
-            css_color = f'rgb({int(rgb[0]*255)},{int(rgb[1]*255)},{int(rgb[2]*255)})'
-
-            css_provider = Gtk.CssProvider()
-            css_provider.load_from_data(
-                f'button {{ background-color: {css_color}; }}'.encode()
-            )
-            button.get_style_context().add_provider(
-                css_provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-            )
-
-            # Select yellow by default
-            if color_name == 'yellow':
-                button.set_active(True)
-
-            # Connect toggle handler
-            button.connect('toggled', self._on_color_button_toggled,
-                          color_name, selected_color, grid)
-
-            grid.attach(button, i % 3, i // 3, 1, 1)
-
-        box.append(grid)
-
-        content_area = dialog.get_content_area()
-        content_area.append(box)
-
-        # Show dialog and handle response
-        dialog.connect('response', self._on_note_color_response, selected_color)
-        dialog.show()
-
-    def _on_color_button_toggled(self, button, color_name, selected_color, grid):
-        """Handle color button toggle"""
-        if button.get_active():
-            selected_color[0] = color_name
-            # Deactivate other buttons
-            child = grid.get_first_child()
-            while child:
-                if isinstance(child, Gtk.ToggleButton) and child != button:
-                    child.set_active(False)
-                child = child.get_next_sibling()
-
-    def _on_note_color_response(self, dialog, response, selected_color):
-        """Handle note color dialog response"""
-        if response == Gtk.ResponseType.OK:
-            # Create note with selected color
-            width = self.get_width()
-            height = self.get_height()
-            center_x, center_y = self.viewport.screen_to_canvas(width / 2, height / 2)
-
-            note = NoteObject(
-                x=center_x - 100,
-                y=center_y - 100,
-                width=200,
-                height=200,
-                text='Double-click to edit',
-                color=selected_color[0]
-            )
-            note.z_index = len(self.objects)
-            self.objects.append(note)
-            self._notify_modified()
-            self.queue_draw()
-
-        dialog.close()
+        note.color_name = new_color
+        from whiteboard.objects.note import NoteObject
+        note.color = NoteObject.COLORS[new_color]
+        self.last_note_color = new_color
+        self._notify_modified()
+        self.queue_draw()
 
     def add_text(self):
         """Add new text to the canvas"""

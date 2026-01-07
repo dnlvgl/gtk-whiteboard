@@ -73,9 +73,10 @@ python main.py
 - **Zoom**: Scroll with mouse wheel, or use +/- buttons in toolbar
 
 ### Object Creation
-- **Add note**: Click + button → Add Note → Choose color
+- **Add note**: Click + button → Add Note (uses last selected color or yellow)
 - **Add text**: Click + button → Add Text
 - **Add image**: Click + button → Add Image → Select file
+- **Change note color**: Right-click note → Change Color → Select color
 
 ### Object Manipulation
 - **Select**: Click on an object
