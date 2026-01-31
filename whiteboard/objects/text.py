@@ -12,17 +12,6 @@ class TextObject(CanvasObject):
     """
 
     def __init__(self, x, y, width=300, height=50, text='', font_size=16):
-        """
-        Initialize a text object
-
-        Args:
-            x: X position
-            y: Y position
-            width: Text box width
-            height: Text box height
-            text: Text content
-            font_size: Font size
-        """
         super().__init__(x, y, width, height)
         self.text = text
         self.font_size = font_size
@@ -30,16 +19,19 @@ class TextObject(CanvasObject):
         self.color = (0, 0, 0)
         self.padding = 5
 
-    def render(self, context):
-        """
-        Render the text using Cairo
+        # Text wrap cache
+        self._wrapped_lines = None
+        self._wrap_text = None
+        self._wrap_width = None
+        self._wrap_font_size = None
 
-        Args:
-            context: Cairo context
-        """
+    def _invalidate_wrap_cache(self):
+        self._wrapped_lines = None
+
+    def render(self, context):
         context.save()
 
-        # Draw background if selected
+        # Draw background if selected or hovered
         if self.selected:
             context.set_source_rgba(0.9, 0.95, 1.0, 0.3)
             context.rectangle(self.x, self.y, self.width, self.height)
@@ -49,38 +41,55 @@ class TextObject(CanvasObject):
             context.set_line_width(1)
             context.rectangle(self.x, self.y, self.width, self.height)
             context.stroke()
+        elif self.hovered:
+            context.set_source_rgba(0.2, 0.6, 1.0, 0.08)
+            context.rectangle(self.x, self.y, self.width, self.height)
+            context.fill()
+
+            context.set_source_rgba(0.2, 0.6, 1.0, 0.4)
+            context.set_line_width(1)
+            context.rectangle(self.x, self.y, self.width, self.height)
+            context.stroke()
 
         # Draw text
         if self.text:
             context.set_source_rgb(*self.color)
-            context.select_font_face(
-                self.font_family,
-                0,  # CAIRO_FONT_SLANT_NORMAL
-                0   # CAIRO_FONT_WEIGHT_NORMAL
-            )
+            context.select_font_face(self.font_family, 0, 0)
             context.set_font_size(self.font_size)
 
-            # Simple word wrapping
-            words = self.text.split()
-            lines = []
-            current_line = []
             max_width = self.width - 2 * self.padding
 
-            for word in words:
-                test_line = ' '.join(current_line + [word])
-                extents = context.text_extents(test_line)
+            # Use cached wrapped lines if inputs haven't changed
+            if (self._wrapped_lines is not None and
+                    self._wrap_text == self.text and
+                    self._wrap_width == max_width and
+                    self._wrap_font_size == self.font_size):
+                lines = self._wrapped_lines
+            else:
+                words = self.text.split()
+                lines = []
+                current_line = []
 
-                if extents.width <= max_width:
-                    current_line.append(word)
-                else:
-                    if current_line:
-                        lines.append(' '.join(current_line))
-                        current_line = [word]
+                for word in words:
+                    test_line = ' '.join(current_line + [word])
+                    extents = context.text_extents(test_line)
+
+                    if extents.width <= max_width:
+                        current_line.append(word)
                     else:
-                        lines.append(word)
+                        if current_line:
+                            lines.append(' '.join(current_line))
+                            current_line = [word]
+                        else:
+                            lines.append(word)
 
-            if current_line:
-                lines.append(' '.join(current_line))
+                if current_line:
+                    lines.append(' '.join(current_line))
+
+                self._wrapped_lines = lines
+                self._wrap_text = self.text
+                self._wrap_width = max_width
+                self._wrap_font_size = self.font_size
 
             # Render lines
             y_offset = self.y + self.padding + self.font_size
@@ -94,11 +103,9 @@ class TextObject(CanvasObject):
         context.restore()
 
     def get_type(self):
-        """Get object type identifier"""
         return 'text'
 
     def to_dict(self):
-        """Serialize to dictionary"""
         return {
             'id': self.id,
             'type': self.get_type(),
@@ -121,7 +128,6 @@ class TextObject(CanvasObject):
 
     @classmethod
     def from_dict(cls, data):
-        """Deserialize from dictionary"""
         obj_data = json.loads(data['data'])
         text_obj = cls(
             x=data['x'],

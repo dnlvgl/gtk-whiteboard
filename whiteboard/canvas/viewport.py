@@ -113,7 +113,7 @@ class Viewport:
         height = screen_height / self.zoom
         return (x, y, width, height)
 
-    def get_visible_objects(self, all_objects, screen_width, screen_height):
+    def get_visible_objects(self, all_objects, screen_width, screen_height, spatial_index=None):
         """
         Get objects that are visible in the current viewport
 
@@ -121,12 +121,17 @@ class Viewport:
             all_objects: List of all canvas objects
             screen_width: Width of the screen area
             screen_height: Height of the screen area
+            spatial_index: Optional SpatialGrid for accelerated query
 
         Returns:
             List of visible objects
         """
         visible_rect = self.get_visible_rect(screen_width, screen_height)
         vx, vy, vw, vh = visible_rect
+
+        if spatial_index is not None:
+            candidates = spatial_index.query_rect(vx, vy, vw, vh)
+            return [obj for obj in candidates if obj.intersects(vx, vy, vw, vh)]
 
         visible = []
         for obj in all_objects:

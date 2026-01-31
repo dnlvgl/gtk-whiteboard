@@ -29,6 +29,7 @@ class CanvasObject(ABC):
         self.height = height
         self.z_index = 0
         self.selected = False
+        self.hovered = False
 
     @abstractmethod
     def render(self, context):

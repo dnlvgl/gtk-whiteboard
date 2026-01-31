@@ -41,11 +41,23 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         menu.append('Open', 'app.open')
         menu.append('Save', 'app.save')
 
+        # Edit submenu
+        edit_menu = Gio.Menu()
+        edit_menu.append('Undo', 'app.undo')
+        edit_menu.append('Redo', 'app.redo')
+        menu.append_submenu('Edit', edit_menu)
+
         # Object submenu
         object_menu = Gio.Menu()
         object_menu.append('Bring to Front', 'win.bring-to-front')
         object_menu.append('Send to Back', 'win.send-to-back')
         menu.append_submenu('Object', object_menu)
+
+        # Grid submenu
+        grid_menu = Gio.Menu()
+        grid_menu.append('Toggle Grid', 'win.toggle-grid')
+        grid_menu.append('Toggle Snap', 'win.toggle-snap')
+        menu.append_submenu('Grid', grid_menu)
 
         menu.append('Quit', 'app.quit')
 
@@ -63,6 +75,26 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         add_button.set_tooltip_text('Add Object')
         add_button.set_menu_model(add_menu)
         header.pack_start(add_button)
+
+        # Undo/Redo buttons
+        undo_redo_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        undo_redo_box.add_css_class('linked')
+
+        self.undo_button = Gtk.Button()
+        self.undo_button.set_icon_name('edit-undo-symbolic')
+        self.undo_button.set_tooltip_text('Undo (Ctrl+Z)')
+        self.undo_button.set_sensitive(False)
+        self.undo_button.connect('clicked', self.on_undo)
+        undo_redo_box.append(self.undo_button)
+
+        self.redo_button = Gtk.Button()
+        self.redo_button.set_icon_name('edit-redo-symbolic')
+        self.redo_button.set_tooltip_text('Redo (Ctrl+Shift+Z)')
+        self.redo_button.set_sensitive(False)
+        self.redo_button.connect('clicked', self.on_redo)
+        undo_redo_box.append(self.redo_button)
+
+        header.pack_start(undo_redo_box)
 
         # Create zoom controls
         zoom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
@@ -85,6 +117,7 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         # Create canvas view
         self.canvas_view = CanvasView()
         self.canvas_view.on_modified = self.mark_modified
+        self.canvas_view.undo_manager.on_state_changed = self._on_undo_state_changed
 
         # Create main content box
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -99,6 +132,13 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         self.create_action('add-image', self.on_add_image)
         self.create_action('bring-to-front', self.on_bring_to_front)
         self.create_action('send-to-back', self.on_send_to_back)
+        self.create_action('toggle-grid', self.on_toggle_grid)
+        self.create_action('toggle-snap', self.on_toggle_snap)
+
+    def _on_undo_state_changed(self, can_undo, can_redo):
+        """Update undo/redo button sensitivity"""
+        self.undo_button.set_sensitive(can_undo)
+        self.redo_button.set_sensitive(can_redo)
 
     def create_action(self, name, callback):
         """Create a window action"""
@@ -106,41 +146,57 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         action.connect('activate', callback)
         self.add_action(action)
 
+    def on_undo(self, button):
+        """Undo the last action"""
+        self.canvas_view.undo()
+
+    def on_redo(self, button):
+        """Redo the last action"""
+        self.canvas_view.redo()
+
     def on_zoom_in(self, button):
-        """Zoom in on the canvas"""
         self.canvas_view.zoom_in()
 
     def on_zoom_out(self, button):
-        """Zoom out on the canvas"""
         self.canvas_view.zoom_out()
 
     def on_add_note(self, action, param):
-        """Add a new note to the canvas"""
         self.canvas_view.add_note()
 
     def on_add_text(self, action, param):
-        """Add new text to the canvas"""
         self.canvas_view.add_text()
 
     def on_add_image(self, action, param):
-        """Add a new image to the canvas"""
         self.canvas_view.add_image()
 
     def on_bring_to_front(self, action, param):
-        """Bring selected object to front"""
         self.canvas_view.bring_to_front()
 
     def on_send_to_back(self, action, param):
-        """Send selected object to back"""
         self.canvas_view.send_to_back()
+
+    def on_toggle_grid(self, action, param):
+        """Toggle grid visibility"""
+        grid = self.canvas_view.grid
+        grid.enabled = not grid.enabled
+        grid.visible = grid.enabled
+        self.canvas_view.queue_draw()
+
+    def on_toggle_snap(self, action, param):
+        """Toggle snap to grid"""
+        grid = self.canvas_view.grid
+        grid.snap_enabled = not grid.snap_enabled
+        # Auto-enable grid visibility when snap is turned on
+        if grid.snap_enabled and not grid.visible:
+            grid.enabled = True
+            grid.visible = True
+            self.canvas_view.queue_draw()
 
     def new_board(self):
         """Create a new whiteboard"""
-        # Check if we need to save current board
         if self.is_modified and self.canvas_view.objects:
             self.show_save_confirmation(self._do_new_board)
             return
-
         self._do_new_board()
 
     def _do_new_board(self):
@@ -154,18 +210,11 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         """Mark the board as modified"""
         if not self.is_modified:
             self.is_modified = True
-            # Update title to show modified state
             title = self.get_title()
             if not title.startswith('*'):
                 self.set_title(f'*{title}')
 
     def show_save_confirmation(self, callback):
-        """
-        Show save confirmation dialog
-
-        Args:
-            callback: Function to call after handling save
-        """
         dialog = Adw.MessageDialog.new(
             self,
             'Save Changes?',
@@ -178,29 +227,22 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         dialog.set_response_appearance('save', Adw.ResponseAppearance.SUGGESTED)
         dialog.set_default_response('save')
         dialog.set_close_response('cancel')
-
         dialog.connect('response', self._on_save_confirmation_response, callback)
         dialog.show()
 
     def _on_save_confirmation_response(self, dialog, response, callback):
-        """Handle save confirmation response"""
         if response == 'save':
-            # Save the board
             self.save_board()
-            # Call the callback after save
             if callback:
                 callback()
         elif response == 'discard':
-            # Discard changes and proceed
             if callback:
                 callback()
-        # If cancel, do nothing
 
     def open_board(self):
         """Open a whiteboard file"""
         dialog = Gtk.FileDialog()
 
-        # Set file filter for .wboard files
         filter_wboard = Gtk.FileFilter()
         filter_wboard.set_name('Whiteboard Files')
         filter_wboard.add_pattern('*.wboard')
@@ -213,17 +255,14 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         dialog.open(self, None, self.on_open_response)
 
     def on_open_response(self, dialog, result):
-        """Handle open file dialog response"""
         try:
             file = dialog.open_finish(result)
             if file:
                 path = file.get_path()
 
-                # Load board from file
                 board_file = BoardFile(path)
                 objects = board_file.load()
 
-                # Update canvas
                 self.canvas_view.load_objects(objects)
 
                 self.current_file = path
@@ -232,7 +271,6 @@ class WhiteboardWindow(Adw.ApplicationWindow):
 
         except Exception as e:
             print(f'Error opening file: {e}')
-            # Show error dialog
             error_dialog = Adw.MessageDialog.new(
                 self,
                 'Error Opening File',
@@ -245,12 +283,10 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         """Save the current whiteboard"""
         if self.current_file:
             try:
-                # Save to existing file
                 board_file = BoardFile(self.current_file)
                 board_file.save(self.canvas_view.objects)
 
                 self.is_modified = False
-                # Update title to remove asterisk
                 import os
                 filename = os.path.basename(self.current_file)
                 self.set_title(f'Whiteboard - {filename}')
@@ -258,7 +294,6 @@ class WhiteboardWindow(Adw.ApplicationWindow):
 
             except Exception as e:
                 print(f'Error saving file: {e}')
-                # Show error dialog
                 error_dialog = Adw.MessageDialog.new(
                     self,
                     'Error Saving File',
@@ -272,11 +307,8 @@ class WhiteboardWindow(Adw.ApplicationWindow):
     def save_board_as(self):
         """Save the whiteboard to a new file"""
         dialog = Gtk.FileDialog()
-
-        # Set initial name
         dialog.set_initial_name('Untitled.wboard')
 
-        # Set file filter for .wboard files
         filter_wboard = Gtk.FileFilter()
         filter_wboard.set_name('Whiteboard Files')
         filter_wboard.add_pattern('*.wboard')
@@ -289,17 +321,14 @@ class WhiteboardWindow(Adw.ApplicationWindow):
         dialog.save(self, None, self.on_save_response)
 
     def on_save_response(self, dialog, result):
-        """Handle save file dialog response"""
         try:
             file = dialog.save_finish(result)
             if file:
                 path = file.get_path()
 
-                # Ensure .wboard extension
                 if not path.endswith('.wboard'):
                     path += '.wboard'
 
-                # Save board to file
                 board_file = BoardFile(path)
                 board_file.save(self.canvas_view.objects)
 
@@ -310,7 +339,6 @@ class WhiteboardWindow(Adw.ApplicationWindow):
 
         except Exception as e:
             print(f'Error saving file: {e}')
-            # Show error dialog
             error_dialog = Adw.MessageDialog.new(
                 self,
                 'Error Saving File',

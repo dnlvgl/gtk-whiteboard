@@ -21,17 +21,6 @@ class NoteObject(CanvasObject):
     }
 
     def __init__(self, x, y, width=200, height=200, text='', color='yellow'):
-        """
-        Initialize a note object
-
-        Args:
-            x: X position
-            y: Y position
-            width: Note width
-            height: Note height
-            text: Note text content
-            color: Color name from COLORS palette
-        """
         super().__init__(x, y, width, height)
         self.text = text
         self.color_name = color
@@ -39,14 +28,16 @@ class NoteObject(CanvasObject):
         self.font_size = 14
         self.padding = 10
 
-    def render(self, context):
-        """
-        Render the note using Cairo
+        # Text wrap cache
+        self._wrapped_lines = None
+        self._wrap_text = None
+        self._wrap_width = None
+        self._wrap_font_size = None
 
-        Args:
-            context: Cairo context
-        """
-        # Draw note background with shadow
+    def _invalidate_wrap_cache(self):
+        self._wrapped_lines = None
+
+    def render(self, context):
         context.save()
 
         # Shadow
@@ -63,6 +54,9 @@ class NoteObject(CanvasObject):
         if self.selected:
             context.set_source_rgb(0.2, 0.6, 1.0)
             context.set_line_width(3)
+        elif self.hovered:
+            context.set_source_rgba(0.2, 0.6, 1.0, 0.5)
+            context.set_line_width(2)
         else:
             context.set_source_rgba(*self.color, 0.5)
             context.set_line_width(1)
@@ -72,34 +66,42 @@ class NoteObject(CanvasObject):
         # Draw text
         if self.text:
             context.set_source_rgb(0, 0, 0)
-            context.select_font_face(
-                'Sans',
-                0,  # CAIRO_FONT_SLANT_NORMAL
-                0   # CAIRO_FONT_WEIGHT_NORMAL
-            )
+            context.select_font_face('Sans', 0, 0)
             context.set_font_size(self.font_size)
 
-            # Simple word wrapping
-            words = self.text.split()
-            lines = []
-            current_line = []
             max_width = self.width - 2 * self.padding
 
-            for word in words:
-                test_line = ' '.join(current_line + [word])
-                extents = context.text_extents(test_line)
+            # Use cached wrapped lines if inputs haven't changed
+            if (self._wrapped_lines is not None and
+                    self._wrap_text == self.text and
+                    self._wrap_width == max_width and
+                    self._wrap_font_size == self.font_size):
+                lines = self._wrapped_lines
+            else:
+                words = self.text.split()
+                lines = []
+                current_line = []
 
-                if extents.width <= max_width:
-                    current_line.append(word)
-                else:
-                    if current_line:
-                        lines.append(' '.join(current_line))
-                        current_line = [word]
+                for word in words:
+                    test_line = ' '.join(current_line + [word])
+                    extents = context.text_extents(test_line)
+
+                    if extents.width <= max_width:
+                        current_line.append(word)
                     else:
-                        lines.append(word)
+                        if current_line:
+                            lines.append(' '.join(current_line))
+                            current_line = [word]
+                        else:
+                            lines.append(word)
 
-            if current_line:
-                lines.append(' '.join(current_line))
+                if current_line:
+                    lines.append(' '.join(current_line))
+
+                self._wrapped_lines = lines
+                self._wrap_text = self.text
+                self._wrap_width = max_width
+                self._wrap_font_size = self.font_size
 
             # Render lines
             y_offset = self.y + self.padding + self.font_size
@@ -113,11 +115,9 @@ class NoteObject(CanvasObject):
         context.restore()
 
     def get_type(self):
-        """Get object type identifier"""
         return 'note'
 
     def to_dict(self):
-        """Serialize to dictionary"""
         return {
             'id': self.id,
             'type': self.get_type(),
@@ -135,7 +135,6 @@ class NoteObject(CanvasObject):
 
     @classmethod
     def from_dict(cls, data):
-        """Deserialize from dictionary"""
         obj_data = json.loads(data['data'])
         note = cls(
             x=data['x'],

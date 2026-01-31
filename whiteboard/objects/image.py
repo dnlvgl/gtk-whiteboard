@@ -93,9 +93,14 @@ class ImageObject(CanvasObject):
 
         context.restore()
 
-        # Draw border if selected
+        # Draw border if selected or hovered
         if self.selected:
             context.set_source_rgb(0.2, 0.6, 1.0)
+            context.set_line_width(2)
+            context.rectangle(self.x, self.y, self.width, self.height)
+            context.stroke()
+        elif self.hovered:
+            context.set_source_rgba(0.2, 0.6, 1.0, 0.5)
             context.set_line_width(2)
             context.rectangle(self.x, self.y, self.width, self.height)
             context.stroke()

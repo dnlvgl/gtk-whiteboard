@@ -23,6 +23,9 @@ class WhiteboardApplication(Adw.Application):
         self.create_action('new', self.on_new, ['<primary>n'])
         self.create_action('open', self.on_open, ['<primary>o'])
         self.create_action('save', self.on_save, ['<primary>s'])
+        self.create_action('undo', self.on_undo, ['<primary>z'])
+        self.create_action('redo', self.on_redo, ['<primary><shift>z'])
+        self.create_action('toggle-grid', self.on_toggle_grid, ['<primary>g'])
 
     def do_activate(self):
         """Called when the application is activated"""
@@ -40,23 +43,34 @@ class WhiteboardApplication(Adw.Application):
             self.set_accels_for_action(f'app.{name}', shortcuts)
 
     def on_quit(self, action, param):
-        """Quit the application"""
         self.quit()
 
     def on_new(self, action, param):
-        """Create a new whiteboard"""
         win = self.props.active_window
         if win:
             win.new_board()
 
     def on_open(self, action, param):
-        """Open a whiteboard file"""
         win = self.props.active_window
         if win:
             win.open_board()
 
     def on_save(self, action, param):
-        """Save the current whiteboard"""
         win = self.props.active_window
         if win:
             win.save_board()
+
+    def on_undo(self, action, param):
+        win = self.props.active_window
+        if win:
+            win.canvas_view.undo()
+
+    def on_redo(self, action, param):
+        win = self.props.active_window
+        if win:
+            win.canvas_view.redo()
+
+    def on_toggle_grid(self, action, param):
+        win = self.props.active_window
+        if win:
+            win.on_toggle_grid(action, param)
